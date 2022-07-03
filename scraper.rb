@@ -1,35 +1,72 @@
-require 'nokogiri'
-require 'httparty'
 require 'byebug'
-require 'watir'
 require 'webdrivers'
+require 'nokogiri'
+require 'selenium-webdriver'
+require 'open-uri'
 require 'csv'
-class Scraper 
-    def initialize
-        @parsed_data
+
+#Class for Scrap the data
+class Scraper
+    attr_accessor :url
+    def initialize(url)
+        @url = url
+        @res
         @total_count
     end
-     def scrap
-        browser = Watir::Browser.new
-
-        browser.goto "https://www.glassdoor.co.in/Reviews/new-delhi-reviews-SRCH_IL.0,9_IM1083_IP#{page_first}.htm"
-        @parsed_data = Nokogiri::HTML(browser.html)
-        per_page = @parsed_data.css('div.single-company-result.module').count
-        total=@parsed_data.css('div.pb-lg-xxl strong').last.text.split()[0].gsub(',',"").to_i
+    def scrap
+        req= open(@url,"User-Agent" => "Whatever you want here")
+        @res = Nokogiri::HTML(req.read)
+        per_page = @res.css('div.single-company-result.module').count
+        total=@res.css('div.pb-lg-xxl strong').last.text.split()[0].gsub(',',"").to_i
         @total_count=(total.to_f/per_page.to_f).to_i
-        browser.close
-     end
-     def csv    
-        fatched_data = @parsed_data.css('div.single-company-result.module div.row div.col-lg-7 div.col-9 h2' )
-        
-        CSV.open("File1.csv", "a+",headers:["Company","Review"]) do |csv|
-            fatched_data.each do |cv|
-                csv << [cv.css("a").text.split("\n").join,cv.css('div.ratingsSummary span.bigRating').text.split("\n").join.to_f]      
+        p @total_count
+    end
+    #Method for Creating the Csv File for all reviews
+    def create_csv
+        page=1
+        while page <=@total_count
+            puts "page #{page}"
+            pagination_req=open("https://www.glassdoor.co.in/Reviews/new-delhi-reviews-SRCH_IL.0,9_IM1083_IP#{page}.htm","User-Agent" => "Whatever you want here")
+            res = Nokogiri::HTML(pagination_req.read)
+            pagination_res = res.css('div.single-company-result.module')
+            CSV.open("company_review_scrap.csv","a+",headers: true , header_converters: :symbol) do |csv|
+                pagination_res.each do |cv|
+                    csv << [cv.css("div.row div.col-lg-7 div.col-9 h2 a").text.split("\n").join.to_s,cv.css('div.row div.col-lg-7 div.col-9
+                        h2 div.ratingsSummary span.bigRating').text.split("\n").join.to_f,cv.css("div.row div.col-lg-5 div.row div.ei-contribution-wrap a.reviews span.num").text.split("\n").join.gsub("k","").to_i]      
+                end
+            end
+            page+=1 
+        end
+    end
+end
+
+#Class For Sorting in desciending order
+class Csvsort
+    attr_reader :csv
+   
+    def initialize(csv)
+        @csv=csv
+    end
+    def sort_csv
+        @csv.shift
+        csv_sorted= @csv.sort_by {|line| -line[2].to_i}
+        #CSV file sorted by the reviews which column=2
+        CSV.open("Company_reviews_desc.csv","a+",headers: ["Company","Ratings","Reviws"] , header_converters: :symbol) do |c|
+            csv_sorted.each do |csv|
+                c<<csv
             end
         end
-    end 
-end 
+    end
+end
 
-scraper = Scraper.new
-scraper.scrap
-scraper.csv
+#Scraping the glassdoor website
+url = 'https://www.glassdoor.co.in/Reviews/new-delhi-reviews-SRCH_IL.0,9_IM1083.htm'
+scrap = Scraper.new(url)
+scrap.scrap
+scrap.create_csv
+
+#Shorting the Csv File in desciending order of reviews
+csv=CSV.open("company_review_scrap.csv","r",{:headers=>false})
+sort=Csvsort.new(csv)
+sort.sort_csv
+csv.close
