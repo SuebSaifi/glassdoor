@@ -4,6 +4,7 @@ require 'nokogiri'
 require 'selenium-webdriver'
 require 'open-uri'
 require 'csv'
+require 'watir'
 
 #Class for Scrap the data
 class Scraper
@@ -14,12 +15,14 @@ class Scraper
         @total_count
     end
     def scrap
-        req= open(@url,"User-Agent" => "Whatever you want here")
-        @res = Nokogiri::HTML(req.read)
+        browser = Watir::Browser.new        
+        browser.goto (@url)
+        @res = Nokogiri::HTML(browser.html)
         per_page = @res.css('div.single-company-result.module').count
         total=@res.css('div.pb-lg-xxl strong').last.text.split()[0].gsub(',',"").to_i
-        @total_count=(total.to_f/per_page.to_f).to_i
-        p @total_count
+        @total_count=(total.to_f/per_page.to_f).to_i        
+        p @total_count        
+        browser.close
     end
     #Method for Creating the Csv File for all reviews
     def create_csv
@@ -35,7 +38,7 @@ class Scraper
                         h2 div.ratingsSummary span.bigRating').text.split("\n").join.to_f,cv.css("div.row div.col-lg-5 div.row div.ei-contribution-wrap a.reviews span.num").text.split("\n").join.gsub("k","").to_i]      
                 end
             end
-            page+=1 
+            page+=1
         end
     end
 end
@@ -50,23 +53,23 @@ class Csvsort
     def sort_csv
         @csv.shift
         csv_sorted= @csv.sort_by {|line| -line[2].to_i}
-        #CSV file sorted by the reviews which column=2
+# CSV file sorted by the reviews which column=2 
         CSV.open("Company_reviews_desc.csv","a+",headers: ["Company","Ratings","Reviws"] , header_converters: :symbol) do |c|
             csv_sorted.each do |csv|
-                c<<csv
+                # c<<csv
             end
         end
     end
 end
 
 #Scraping the glassdoor website
-url = 'https://www.glassdoor.co.in/Reviews/new-delhi-reviews-SRCH_IL.0,9_IM1083.htm'
-scrap = Scraper.new(url)
-scrap.scrap
-scrap.create_csv
+# url = 'https://www.glassdoor.co.in/Reviews/new-delhi-reviews-SRCH_IL.0,9_IM1083.htm'
+# scrap = Scraper.new(url)
+# scrap.scrap
+# # scrap.create_csv
 
-#Shorting the Csv File in desciending order of reviews
-csv=CSV.open("company_review_scrap.csv","r",{:headers=>false})
-sort=Csvsort.new(csv)
-sort.sort_csv
-csv.close
+# #Shorting the Csv File in desciending order of reviews
+# csv=CSV.open("company_review_scrap.csv","r",{:headers=>false})
+# sort=Csvsort.new(csv)
+# # sort.sort_csv
+# csv.close
